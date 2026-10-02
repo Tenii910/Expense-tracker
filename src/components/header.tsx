@@ -3,12 +3,13 @@
 import { useState, useRef } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { Moon, Sun, Wallet, Trash2, ChevronDown, Download, Upload, LayoutDashboard, ListOrdered, Target, RefreshCw, Bookmark, BarChart3 } from "lucide-react";
+import { Moon, Sun, Wallet, Trash2, ChevronDown, Download, Upload, LayoutDashboard, ListOrdered, Target, RefreshCw, Bookmark, BarChart3, User, LogIn, LogOut } from "lucide-react";
 import { useThemeStore } from "@/lib/theme-store";
 import { useCurrencyStore, CURRENCIES, type CurrencyCode } from "@/lib/currency-store";
 import { useExpenseStore } from "@/lib/store";
 import { useConfirmStore } from "@/lib/confirm-store";
 import { useToastStore } from "@/lib/toast-store";
+import { useAuthStore } from "@/lib/auth-store";
 import { createBackup, restoreBackup } from "@/lib/backup";
 import { ImportButton } from "./import-button";
 import { CategoryManager } from "./category-manager";
@@ -29,6 +30,8 @@ const PAGE_TITLES: Record<string, string> = {
   "/recurring": "Recurring",
   "/templates": "Templates",
   "/analytics": "Analytics",
+  "/login": "Sign In",
+  "/signup": "Create Account",
 };
 
 export function Header() {
@@ -39,6 +42,8 @@ export function Header() {
   const clearAll = useExpenseStore((s) => s.clearAll);
   const showConfirm = useConfirmStore((s) => s.show);
   const addToast = useToastStore((s) => s.addToast);
+  const currentUser = useAuthStore((s) => s.currentUser);
+  const logout = useAuthStore((s) => s.logout);
   const [showMenu, setShowMenu] = useState(false);
   const [showCurrency, setShowCurrency] = useState(false);
   const restoreRef = useRef<HTMLInputElement>(null);
@@ -75,9 +80,9 @@ export function Header() {
     <header className="sticky top-0 z-40 border-b border-border bg-surface/80 backdrop-blur-lg">
       <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3 sm:px-6">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary">
+          <Link href="/" className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary">
             <Wallet size={18} className="text-white" />
-          </div>
+          </Link>
           <div>
             <h1 className="text-lg font-semibold text-text-primary leading-tight">
               {pageTitle}
@@ -144,22 +149,34 @@ export function Header() {
           <div className="relative">
             <button
               onClick={() => setShowMenu(!showMenu)}
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-border text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors cursor-pointer"
-              aria-label="Settings"
+              className="flex h-9 items-center gap-1.5 rounded-xl border border-border px-2.5 text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors cursor-pointer"
+              aria-label="Settings and Profile"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="3" />
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-              </svg>
+              <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-primary/10 text-primary font-bold text-xs">
+                {currentUser ? currentUser.name[0].toUpperCase() : <User size={14} />}
+              </div>
+              {currentUser && (
+                <span className="hidden sm:inline text-xs font-semibold text-text-primary truncate max-w-[80px]">
+                  {currentUser.name.split(" ")[0]}
+                </span>
+              )}
             </button>
 
             {showMenu && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
-                <div className="absolute right-0 top-full mt-1 w-48 rounded-xl border border-border bg-surface p-1 shadow-lg z-50">
-                  <div className="px-3 py-2 text-xs font-medium text-text-tertiary border-b border-border mb-1">
-                    {expenses.length} expense{expenses.length !== 1 ? "s" : ""}
-                  </div>
+                <div className="absolute right-0 top-full mt-1 w-52 rounded-xl border border-border bg-surface p-1 shadow-lg z-50">
+                  {currentUser ? (
+                    <div className="px-3 py-2 border-b border-border mb-1">
+                      <p className="text-xs font-bold text-text-primary truncate">{currentUser.name}</p>
+                      <p className="text-[11px] text-text-tertiary truncate">{currentUser.email}</p>
+                    </div>
+                  ) : (
+                    <div className="px-3 py-2 border-b border-border mb-1">
+                      <p className="text-xs text-text-tertiary">Guest User</p>
+                    </div>
+                  )}
+
                   <ImportButton />
                   <CategoryManager />
                   <button
@@ -186,13 +203,38 @@ export function Header() {
                     <Upload size={14} />
                     Restore data
                   </button>
+                  
                   <div className="border-t border-border my-1" />
+
+                  {currentUser ? (
+                    <button
+                      onClick={() => {
+                        logout();
+                        setShowMenu(false);
+                        addToast({ message: "Logged out", type: "info" });
+                      }}
+                      className="w-full rounded-lg px-3 py-2 text-left text-sm text-danger hover:bg-danger/10 transition-colors cursor-pointer flex items-center gap-2"
+                    >
+                      <LogOut size={14} />
+                      Sign out
+                    </button>
+                  ) : (
+                    <Link
+                      href="/login"
+                      onClick={() => setShowMenu(false)}
+                      className="w-full rounded-lg px-3 py-2 text-left text-sm text-primary font-medium hover:bg-primary/10 transition-colors cursor-pointer flex items-center gap-2"
+                    >
+                      <LogIn size={14} />
+                      Sign in
+                    </Link>
+                  )}
+
                   {expenses.length > 0 && (
                     <button
                       onClick={handleClearAll}
-                      className="w-full rounded-lg px-3 py-2 text-left text-sm text-danger hover:bg-danger/10 transition-colors cursor-pointer flex items-center gap-2"
+                      className="w-full rounded-lg px-3 py-2 text-left text-xs text-text-tertiary hover:text-danger hover:bg-danger/10 transition-colors cursor-pointer flex items-center gap-2 mt-1"
                     >
-                      <Trash2 size={14} />
+                      <Trash2 size={12} />
                       Clear all data
                     </button>
                   )}

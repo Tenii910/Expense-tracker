@@ -27,8 +27,22 @@ export function TotalDisplay({ expenses: propExpenses }: TotalDisplayProps) {
   const total = expenses.reduce((sum, e) => sum + e.amount, 0);
   const count = expenses.length;
 
-  const uniqueDays = new Set(expenses.map((e) => e.date)).size;
-  const avgPerDay = uniqueDays > 0 ? total / uniqueDays : 0;
+  const now = new Date();
+  let daysInPeriod = 1;
+  if (expenses.length > 0) {
+    const sampleDate = new Date(expenses[0].date);
+    const isCurrentMonth =
+      sampleDate.getFullYear() === now.getFullYear() &&
+      sampleDate.getMonth() === now.getMonth();
+
+    if (isCurrentMonth) {
+      daysInPeriod = Math.max(1, now.getDate());
+    } else {
+      daysInPeriod = new Date(sampleDate.getFullYear(), sampleDate.getMonth() + 1, 0).getDate();
+    }
+  }
+
+  const avgPerDay = expenses.length > 0 ? total / daysInPeriod : 0;
 
   const cards = [
     {

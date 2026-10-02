@@ -6,6 +6,7 @@ export interface Expense {
   date: string;
   createdAt: string;
   pinned?: boolean;
+  userId?: string;
 }
 
 export type Category = string;

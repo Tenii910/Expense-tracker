@@ -251,8 +251,8 @@ function RecurringForm({
         <Input
           label="Amount (₦)"
           type="number"
-          step="100"
-          min="1"
+          step="any"
+          min="0.01"
           placeholder="50000"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}

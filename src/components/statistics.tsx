@@ -49,8 +49,28 @@ export function Statistics({ expenses, viewMode, month }: StatisticsProps) {
     return { min: new Date(Math.min(...dates.map((d) => d.getTime()))), max: new Date(Math.max(...dates.map((d) => d.getTime()))) };
   }, [expenses]);
 
-  const dayCount = dateBounds ? differenceInDays(dateBounds.max, dateBounds.min) + 1 : 0;
-  const avgDaily = dayCount > 0 ? total / dayCount : 0;
+  const avgDaily = useMemo(() => {
+    if (expenses.length === 0) return 0;
+    const now = new Date();
+    
+    if (viewMode === "month") {
+      const [y, m] = month.split("-").map(Number);
+      const isCurrentMonth = now.getFullYear() === y && now.getMonth() + 1 === m;
+      const daysInMonth = isCurrentMonth ? Math.max(1, now.getDate()) : new Date(y, m, 0).getDate();
+      return total / daysInMonth;
+    } else if (viewMode === "week") {
+      return total / 7;
+    } else if (viewMode === "year") {
+      const [y] = month.split("-").map(Number);
+      const isCurrentYear = now.getFullYear() === y;
+      const dayOfYear = isCurrentYear ? Math.ceil((now.getTime() - new Date(y, 0, 1).getTime()) / (1000 * 60 * 60 * 24)) : 365;
+      return total / Math.max(1, dayOfYear);
+    } else {
+      if (!dateBounds) return 0;
+      const days = Math.max(1, differenceInDays(now, dateBounds.min) + 1);
+      return total / days;
+    }
+  }, [expenses, total, viewMode, month, dateBounds]);
 
   const dailyTotals = useMemo(() => {
     const map = new Map<string, number>();

@@ -3,6 +3,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { PWARegister } from "@/components/pwa-register";
 import { Header } from "@/components/header";
+import { AuthGuard } from "@/components/auth-guard";
 
 export const metadata: Metadata = {
   title: "Expense Tracker — Track your spending",
@@ -43,8 +44,7 @@ export default function RootLayout({
       </head>
       <body className="bg-surface text-text-primary antialiased">
          <ThemeProvider>
-          <Header />
-          {children}
+          <AuthGuard>{children}</AuthGuard>
           <PWARegister />
         </ThemeProvider>
       </body>

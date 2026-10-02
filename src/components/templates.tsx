@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Plus, Bookmark, X, Sparkles, Bolt, Clock } from "lucide-react";
+import { Plus, Bookmark, X, Sparkles, Bolt, Clock, Trash2 } from "lucide-react";
 import { useExpenseStore } from "@/lib/store";
 import { useToastStore } from "@/lib/toast-store";
 import { useTemplateStore, type ExpenseTemplate } from "@/lib/template-store";
@@ -125,7 +125,7 @@ export function Templates() {
                 className="group relative overflow-hidden rounded-2xl border border-border bg-surface p-5 card-hover-shadow"
               >
                 <div
-                  className="absolute right-0 top-0 h-24 w-24 -translate-y-6 translate-x-6 rounded-full opacity-[0.06]"
+                  className="pointer-events-none absolute right-0 top-0 h-24 w-24 -translate-y-6 translate-x-6 rounded-full opacity-[0.06]"
                   style={{ backgroundColor: catColor }}
                 />
                 <div className="flex items-start justify-between mb-3">
@@ -138,12 +138,14 @@ export function Templates() {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
+                      e.preventDefault();
                       removeTemplate(t.id);
                       addToast({ message: "Template removed", type: "info" });
                     }}
-                    className="rounded-lg p-1.5 text-text-tertiary opacity-0 group-hover:opacity-100 hover:text-danger hover:bg-danger/10 transition-all cursor-pointer"
+                    className="relative z-10 rounded-lg p-1.5 text-text-tertiary hover:text-danger hover:bg-danger/10 transition-colors cursor-pointer"
+                    title="Delete template"
                   >
-                    <X size={14} />
+                    <Trash2 size={16} />
                   </button>
                 </div>
                 <p className="text-lg font-bold text-text-primary mb-0.5">
@@ -210,8 +212,8 @@ function TemplateForm({
         <Input
           label="Amount (₦)"
           type="number"
-          step="100"
-          min="1"
+          step="any"
+          min="0.01"
           placeholder="5000"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}

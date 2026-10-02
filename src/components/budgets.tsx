@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Target, Plus, Pencil, Trash2 } from "lucide-react";
 import { useExpenseStore } from "@/lib/store";
 import { useBudgetStore } from "@/lib/budget-store";
+import { useToastStore } from "@/lib/toast-store";
 import { getCategoryColor } from "@/lib/types";
 import { useAllCategories, useCategoryStore } from "@/lib/category-store";
 import { useFormatCurrency } from "@/lib/utils";
@@ -17,6 +18,7 @@ export function Budgets() {
   const formatCurrency = useFormatCurrency();
   const categories = useAllCategories();
   const customs = useCategoryStore((s) => s.customs);
+  const addToast = useToastStore((s) => s.addToast);
   const [editing, setEditing] = useState<{ category: string; amount: string } | null>(null);
 
   function colorFor(cat: string) {
@@ -25,35 +27,23 @@ export function Budgets() {
   }
 
   const hasBudgets = Object.keys(budgets).length > 0;
-
-  if (!hasBudgets) {
-    return (
-      <div className="rounded-2xl border border-border bg-surface p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Target size={18} className="text-primary" />
-            <h3 className="text-sm font-semibold text-text-primary">Monthly Budgets</h3>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setEditing({ category: categories[0], amount: "" });
-            }}
-          >
-            <Plus size={14} />
-            Set Budget
-          </Button>
-        </div>
-        <p className="text-sm text-text-tertiary">
-          Set monthly spending targets to stay on track.
-        </p>
-      </div>
-    );
-  }
-
   const currentMonth = new Date().toISOString().slice(0, 7);
   const monthExpenses = expenses.filter((e) => e.date.startsWith(currentMonth));
+
+  const handleOpenAdd = () => {
+    const unbudgeted = categories.find((c) => budgets[c] === undefined);
+    const initialCategory = unbudgeted || categories[0] || "";
+    const initialAmount = budgets[initialCategory] !== undefined ? budgets[initialCategory]!.toString() : "";
+    setEditing({ category: initialCategory, amount: initialAmount });
+  };
+
+  const handleCategoryChange = (newCat: string) => {
+    const existingAmount = budgets[newCat];
+    setEditing({
+      category: newCat,
+      amount: existingAmount !== undefined ? existingAmount.toString() : editing?.amount || "",
+    });
+  };
 
   return (
     <div className="rounded-2xl border border-border bg-surface p-6">
@@ -67,68 +57,79 @@ export function Budgets() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => setEditing({ category: categories[0], amount: "" })}
+          onClick={handleOpenAdd}
         >
           <Plus size={14} />
-          Add
+          {hasBudgets ? "Add" : "Set Budget"}
         </Button>
       </div>
 
-      <div className="space-y-3">
-        {(Object.entries(budgets) as [string, number][])
-          .sort(([, a], [, b]) => b - a)
-          .map(([category, budget]) => {
-            const spent = monthExpenses
-              .filter((e) => e.category === category)
-              .reduce((sum, e) => sum + e.amount, 0);
-            const pct = Math.min((spent / budget) * 100, 100);
-            const isOver = spent > budget;
+      {!hasBudgets ? (
+        <p className="text-sm text-text-tertiary">
+          Set monthly spending targets to stay on track.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {(Object.entries(budgets) as [string, number][])
+            .sort(([, a], [, b]) => b - a)
+            .map(([category, budget]) => {
+              const spent = monthExpenses
+                .filter((e) => e.category === category)
+                .reduce((sum, e) => sum + e.amount, 0);
+              const pct = Math.min((spent / budget) * 100, 100);
+              const isOver = spent > budget;
 
-            return (
-              <div key={category} className="group">
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="h-2.5 w-2.5 rounded-full"
-                      style={{ backgroundColor: colorFor(category) }}
-                    />
-                    <span className="text-sm text-text-primary">{category}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-sm font-medium ${isOver ? "text-danger" : "text-text-primary"}`}>
-                      {formatCurrency(spent)}
-                      <span className="text-text-tertiary font-normal">
-                        {" "}/ {formatCurrency(budget)}
+              return (
+                <div key={category} className="group">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="h-2.5 w-2.5 rounded-full"
+                        style={{ backgroundColor: colorFor(category) }}
+                      />
+                      <span className="text-sm text-text-primary">{category}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-sm font-medium ${isOver ? "text-danger" : "text-text-primary"}`}>
+                        {formatCurrency(spent)}
+                        <span className="text-text-tertiary font-normal">
+                          {" "}/ {formatCurrency(budget)}
+                        </span>
                       </span>
-                    </span>
-                    <button
-                      onClick={() =>
-                        setEditing({ category, amount: budget.toString() })
-                      }
-                      className="opacity-0 group-hover:opacity-100 rounded-lg p-1 text-text-tertiary hover:text-text-primary transition-all cursor-pointer"
-                    >
-                      <Pencil size={12} />
-                    </button>
-                    <button
-                      onClick={() => removeBudget(category)}
-                      className="opacity-0 group-hover:opacity-100 rounded-lg p-1 text-text-tertiary hover:text-danger transition-all cursor-pointer"
-                    >
-                      <Trash2 size={12} />
-                    </button>
+                      <button
+                        onClick={() =>
+                          setEditing({ category, amount: budget.toString() })
+                        }
+                        className="opacity-0 group-hover:opacity-100 rounded-lg p-1 text-text-tertiary hover:text-text-primary transition-all cursor-pointer"
+                        title="Edit budget"
+                      >
+                        <Pencil size={12} />
+                      </button>
+                      <button
+                        onClick={() => {
+                          removeBudget(category);
+                          addToast({ message: `Removed budget for ${category}`, type: "info" });
+                        }}
+                        className="opacity-0 group-hover:opacity-100 rounded-lg p-1 text-text-tertiary hover:text-danger transition-all cursor-pointer"
+                        title="Remove budget"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-surface-alt overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        isOver ? "bg-danger" : pct > 80 ? "bg-amber-500" : "bg-accent"
+                      }`}
+                      style={{ width: `${pct}%` }}
+                    />
                   </div>
                 </div>
-                <div className="h-2 w-full rounded-full bg-surface-alt overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${
-                      isOver ? "bg-danger" : pct > 80 ? "bg-amber-500" : "bg-accent"
-                    }`}
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-      </div>
+              );
+            })}
+        </div>
+      )}
 
       {editing && (
         <Modal
@@ -142,6 +143,10 @@ export function Budgets() {
               const amt = parseFloat(editing.amount);
               if (!isNaN(amt) && amt > 0) {
                 setBudget(editing.category, amt);
+                addToast({
+                  message: `Budget for ${editing.category} set to ${formatCurrency(amt)}`,
+                  type: "success",
+                });
                 setEditing(null);
               }
             }}
@@ -151,14 +156,12 @@ export function Budgets() {
               <label className="text-sm font-medium text-text-secondary">Category</label>
               <select
                 value={editing.category}
-                onChange={(e) =>
-                  setEditing({ ...editing, category: e.target.value })
-                }
-                className="w-full rounded-xl border border-border bg-surface px-4 py-2.5 text-sm text-text-primary"
+                onChange={(e) => handleCategoryChange(e.target.value)}
+                className="w-full rounded-xl border border-border bg-surface px-4 py-2.5 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
               >
                 {categories.map((c) => (
                   <option key={c} value={c}>
-                    {c}
+                    {c} {budgets[c] !== undefined ? `(Current: ${formatCurrency(budgets[c]!)})` : ""}
                   </option>
                 ))}
               </select>
@@ -166,13 +169,15 @@ export function Budgets() {
             <Input
               label="Monthly Budget (₦)"
               type="number"
-              step="100"
-              min="1"
+              step="any"
+              min="0.01"
               placeholder="50000"
               value={editing.amount}
               onChange={(e) =>
                 setEditing({ ...editing, amount: e.target.value })
               }
+              autoFocus
+              required
             />
             <div className="flex gap-3">
               <Button type="button" variant="ghost" onClick={() => setEditing(null)} className="flex-1">

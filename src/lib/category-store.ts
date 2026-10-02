@@ -1,14 +1,16 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { generateId } from "./utils";
+import { useAuthStore } from "./auth-store";
 
 interface CustomCategory {
   id: string;
   name: string;
   color: string;
+  userId?: string;
 }
 
-interface CategoryStore {
+interface CategoryStoreState {
   customs: CustomCategory[];
   addCustom: (name: string, color: string) => string | null;
   removeCustom: (id: string) => void;
@@ -35,17 +37,18 @@ function nextColor(): string {
   return c;
 }
 
-export const useCategoryStore = create<CategoryStore>()(
+export const useCategoryStoreRaw = create<CategoryStoreState>()(
   persist(
     (set, get) => ({
       customs: [],
       addCustom: (name, color) => {
         const { customs } = get();
-        if (customs.some((c) => c.name.toLowerCase() === name.toLowerCase())) {
+        const currentUser = useAuthStore.getState().currentUser;
+        if (customs.some((c) => c.name.toLowerCase() === name.toLowerCase() && (c.userId === currentUser?.id || !c.userId))) {
           return null;
         }
         const id = generateId();
-        set({ customs: [...customs, { id, name, color }] });
+        set({ customs: [...customs, { id, name, color, userId: currentUser?.id }] });
         return id;
       },
       removeCustom: (id) =>
@@ -67,6 +70,35 @@ export const useCategoryStore = create<CategoryStore>()(
     { name: "expense-categories" },
   ),
 );
+
+let lastCustoms: CustomCategory[] | null = null;
+let lastCatUserId: string | undefined = undefined;
+let cachedScopedCategoryState: CategoryStoreState | null = null;
+
+function getScopedCategoryState(state: CategoryStoreState, userId: string | undefined): CategoryStoreState {
+  const customs = state?.customs || [];
+  if (customs === lastCustoms && userId === lastCatUserId && cachedScopedCategoryState) {
+    return cachedScopedCategoryState;
+  }
+  const userCustoms = userId
+    ? customs.filter((c) => c && (c.userId === userId || !c.userId))
+    : customs;
+  lastCustoms = customs;
+  lastCatUserId = userId;
+  cachedScopedCategoryState = { ...state, customs: userCustoms };
+  return cachedScopedCategoryState;
+}
+
+export function useCategoryStore<T = CategoryStoreState>(
+  selector?: (state: CategoryStoreState) => T
+): T {
+  const currentUser = useAuthStore((s) => s.currentUser);
+  const userId = currentUser?.id;
+  return useCategoryStoreRaw((state) => {
+    const scopedState = getScopedCategoryState(state, userId);
+    return selector ? selector(scopedState) : (scopedState as unknown as T);
+  });
+}
 
 import { useMemo } from "react";
 import { DEFAULT_CATEGORIES, getCategoryColor } from "./types";
