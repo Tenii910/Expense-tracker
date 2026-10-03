@@ -9,6 +9,7 @@ import { getCategoryColor } from "@/lib/types";
 import { useAllCategories, useCategoryStore } from "@/lib/category-store";
 import { useFormatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { showBackendError } from "@/lib/backend-errors";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 
@@ -107,8 +108,9 @@ export function Budgets() {
                       </button>
                       <button
                         onClick={() => {
-                          removeBudget(category);
-                          addToast({ message: `Removed budget for ${category}`, type: "info" });
+                          void removeBudget(category).then(() => {
+                            addToast({ message: `Removed budget for ${category}`, type: "info" });
+                          }).catch(showBackendError);
                         }}
                         className="opacity-0 group-hover:opacity-100 rounded-lg p-1 text-text-tertiary hover:text-danger transition-all cursor-pointer"
                         title="Remove budget"
@@ -138,16 +140,20 @@ export function Budgets() {
           title={budgets[editing.category] ? `Edit ${editing.category} Budget` : `Set ${editing.category} Budget`}
         >
           <form
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
               const amt = parseFloat(editing.amount);
               if (!isNaN(amt) && amt > 0) {
-                setBudget(editing.category, amt);
-                addToast({
-                  message: `Budget for ${editing.category} set to ${formatCurrency(amt)}`,
-                  type: "success",
-                });
-                setEditing(null);
+                try {
+                  await setBudget(editing.category, amt);
+                  addToast({
+                    message: `Budget for ${editing.category} set to ${formatCurrency(amt)}`,
+                    type: "success",
+                  });
+                  setEditing(null);
+                } catch (error) {
+                  showBackendError(error);
+                }
               }
             }}
             className="flex flex-col gap-4"

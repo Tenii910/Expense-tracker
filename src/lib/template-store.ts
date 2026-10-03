@@ -1,7 +1,5 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
-import { generateId } from "./utils";
-import { useAuthStore } from "./auth-store";
+import { getSupabaseClient } from "./supabase";
 
 export interface ExpenseTemplate {
   id: string;
@@ -13,54 +11,46 @@ export interface ExpenseTemplate {
 
 interface TemplateStoreState {
   templates: ExpenseTemplate[];
-  addTemplate: (t: Omit<ExpenseTemplate, "id">) => void;
-  removeTemplate: (id: string) => void;
+  addTemplate: (template: Omit<ExpenseTemplate, "id" | "userId">) => Promise<void>;
+  removeTemplate: (id: string) => Promise<void>;
   loadAll: (templates: ExpenseTemplate[]) => void;
 }
 
-export const useTemplateStoreRaw = create<TemplateStoreState>()(
-  persist(
-    (set) => ({
-      templates: [],
-      addTemplate: (data) => {
-        const currentUser = useAuthStore.getState().currentUser;
-        set((s) => ({
-          templates: [...s.templates, { ...data, id: generateId(), userId: currentUser?.id }],
-        }));
-      },
-      removeTemplate: (id) =>
-        set((s) => ({
-          templates: s.templates.filter((t) => t.id !== id),
-        })),
-      loadAll: (templates) => set({ templates }),
-    }),
-    { name: "expense-templates" },
-  ),
-);
-
-let lastTemplates: ExpenseTemplate[] | null = null;
-let lastTplUserId: string | undefined = undefined;
-let cachedScopedTemplateState: TemplateStoreState | null = null;
-
-function getScopedTemplateState(state: TemplateStoreState, userId: string | undefined): TemplateStoreState {
-  const templates = state?.templates || [];
-  if (templates === lastTemplates && userId === lastTplUserId && cachedScopedTemplateState) {
-    return cachedScopedTemplateState;
-  }
-  const userTemplates = userId
-    ? templates.filter((t) => t && (t.userId === userId || !t.userId))
-    : templates;
-  lastTemplates = templates;
-  lastTplUserId = userId;
-  cachedScopedTemplateState = { ...state, templates: userTemplates };
-  return cachedScopedTemplateState;
+function mapTemplate(row: {
+  id: string;
+  amount: number | string;
+  category: string;
+  description: string;
+  user_id: string;
+}): ExpenseTemplate {
+  return {
+    id: row.id,
+    amount: Number(row.amount),
+    category: row.category,
+    description: row.description,
+    userId: row.user_id,
+  };
 }
 
+export const useTemplateStoreRaw = create<TemplateStoreState>()((set) => ({
+  templates: [],
+  addTemplate: async (template) => {
+    const { data, error } = await getSupabaseClient()
+      .from("expense_templates")
+      .insert(template)
+      .select("*")
+      .single();
+    if (error) throw new Error(error.message);
+    set((state) => ({ templates: [...state.templates, mapTemplate(data)] }));
+  },
+  removeTemplate: async (id) => {
+    const { error } = await getSupabaseClient().from("expense_templates").delete().eq("id", id);
+    if (error) throw new Error(error.message);
+    set((state) => ({ templates: state.templates.filter((item) => item.id !== id) }));
+  },
+  loadAll: (templates) => set({ templates }),
+}));
+
 export function useTemplateStore<T>(selector: (state: TemplateStoreState) => T): T {
-  const currentUser = useAuthStore((s) => s.currentUser);
-  const userId = currentUser?.id;
-  return useTemplateStoreRaw((state) => {
-    const scopedState = getScopedTemplateState(state, userId);
-    return selector(scopedState);
-  });
+  return useTemplateStoreRaw(selector);
 }

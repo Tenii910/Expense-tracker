@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 export default function LoginPage() {
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
+  const backendError = useAuthStore((s) => s.backendError);
   const addToast = useToastStore((s) => s.addToast);
 
   const [email, setEmail] = useState("");
@@ -20,15 +21,15 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
 
-    const res = login(email, password);
+    const res = await login(email, password);
 
     if (res.success) {
-      addToast({ message: "Welcome back!", type: "success" });
+      addToast({ message: "Welcome back!", type: "success", placement: "center" });
       router.push("/");
     } else {
       setError(res.error || "Failed to log in");
@@ -55,6 +56,11 @@ export default function LoginPage() {
 
         <div className="rounded-2xl border border-border bg-surface p-6 sm:p-8 card-shadow">
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            {backendError && (
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs font-medium text-amber-700">
+                {backendError}
+              </div>
+            )}
             {error && (
               <div className="rounded-xl border border-danger/20 bg-danger/10 p-3 text-xs font-medium text-danger">
                 {error}
@@ -98,7 +104,7 @@ export default function LoginPage() {
           </form>
 
           <div className="mt-6 border-t border-border pt-6 text-center text-xs text-text-tertiary">
-            Don't have an account yet?{" "}
+            Don&apos;t have an account yet?{" "}
             <Link href="/signup" className="font-semibold text-primary hover:underline inline-flex items-center gap-0.5">
               Sign up <ArrowRight size={12} />
             </Link>

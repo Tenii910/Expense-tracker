@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { getSupabaseClient } from "./supabase";
+import { useAuthStore } from "./auth-store";
 
 export type CurrencyCode = "NGN" | "USD" | "EUR" | "GBP" | "GHS";
 
@@ -13,15 +14,17 @@ export const CURRENCIES: Record<CurrencyCode, { symbol: string; name: string; de
 
 interface CurrencyStore {
   code: CurrencyCode;
-  setCode: (code: CurrencyCode) => void;
+  setCode: (code: CurrencyCode) => Promise<void>;
 }
 
-export const useCurrencyStore = create<CurrencyStore>()(
-  persist(
-    (set) => ({
-      code: "NGN",
-      setCode: (code) => set({ code }),
-    }),
-    { name: "expense-currency" },
-  ),
-);
+export const useCurrencyStore = create<CurrencyStore>()((set) => ({
+  code: "NGN",
+  setCode: async (code) => {
+    const userId = useAuthStore.getState().currentUser?.id;
+    if (!userId) throw new Error("Sign in to save your currency preference.");
+    const { error } = await getSupabaseClient().from("profiles")
+      .update({ currency_code: code }).eq("id", userId);
+    if (error) throw new Error(error.message);
+    set({ code });
+  },
+}));

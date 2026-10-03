@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useCategoryStore } from "@/lib/category-store";
 import { DEFAULT_CATEGORIES } from "@/lib/types";
+import { showBackendError } from "@/lib/backend-errors";
 
 const CUSTOM_COLORS = [
   "#FF6B35",
@@ -30,21 +31,25 @@ export function CategoryManager() {
   const [color, setColor] = useState(CUSTOM_COLORS[0]);
   const [error, setError] = useState<string | null>(null);
 
-  function handleAdd() {
+  async function handleAdd() {
     const trimmed = name.trim();
     if (!trimmed) return;
     if (DEFAULT_CATEGORIES.some((c) => c.toLowerCase() === trimmed.toLowerCase())) {
       setError("A default category with this name already exists");
       return;
     }
-    const result = addCustom(trimmed, color);
-    if (result === null) {
-      setError("A custom category with this name already exists");
-      return;
+    try {
+      const result = await addCustom(trimmed, color);
+      if (result === null) {
+        setError("A custom category with this name already exists");
+        return;
+      }
+      setName("");
+      setColor(CUSTOM_COLORS[0]);
+      setError(null);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not save this category.");
     }
-    setName("");
-    setColor(CUSTOM_COLORS[0]);
-    setError(null);
   }
 
   return (
@@ -79,13 +84,13 @@ export function CategoryManager() {
                       <input
                         type="color"
                         value={cat.color}
-                        onChange={(e) => recolorCustom(cat.id, e.target.value)}
+                        onChange={(e) => void recolorCustom(cat.id, e.target.value).catch(showBackendError)}
                         className="absolute inset-0 opacity-0 cursor-pointer"
                       />
                     </div>
                     <span className="flex-1 text-sm text-text-primary">{cat.name}</span>
                     <button
-                      onClick={() => removeCustom(cat.id)}
+                      onClick={() => void removeCustom(cat.id).catch(showBackendError)}
                       className="rounded-lg p-1 text-text-tertiary hover:text-danger transition-colors cursor-pointer"
                     >
                       <Trash2 size={14} />

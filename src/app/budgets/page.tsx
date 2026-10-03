@@ -3,8 +3,6 @@
 import { motion } from "framer-motion";
 import { Target } from "lucide-react";
 import { Budgets } from "@/components/budgets";
-import { ToastContainer } from "@/components/ui/toast";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 export default function BudgetsPage() {
   return (
@@ -25,8 +23,6 @@ export default function BudgetsPage() {
         </motion.div>
         <Budgets />
       </main>
-      <ToastContainer />
-      <ConfirmDialog />
     </div>
   );
 }

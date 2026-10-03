@@ -12,8 +12,6 @@ import { MonthlyComparison } from "@/components/charts/monthly-comparison";
 import { Statistics } from "@/components/statistics";
 import { MonthPicker } from "@/components/month-picker";
 import { WeekPicker } from "@/components/week-picker";
-import { ToastContainer } from "@/components/ui/toast";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useExpenseStore } from "@/lib/store";
 import { startOfWeek, endOfWeek, parseISO } from "date-fns";
 
@@ -170,8 +168,6 @@ export default function AnalyticsPage() {
           )}
         </div>
       </main>
-      <ToastContainer />
-      <ConfirmDialog />
     </div>
   );
 }
