@@ -4,6 +4,7 @@ import { useState, useMemo, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUpDown } from "lucide-react";
 import { useExpenseStore } from "@/lib/store";
+import { showBackendError } from "@/lib/backend-errors";
 import { useToastStore } from "@/lib/toast-store";
 import { ExpenseItem } from "./expense-item";
 import { ExpenseForm } from "./expense-form";
@@ -88,31 +89,42 @@ export function ExpenseList({ search, selectedCategories, sortBy, onSortChange }
 
   const sorted = useMemo(() => sortExpenses(filtered, sortBy), [filtered, sortBy]);
 
-  function handleDelete(expense: Expense) {
-    removeExpense(expense.id);
+  async function handleDelete(expense: Expense) {
+    try {
+      await removeExpense(expense.id);
+    } catch (error) {
+      showBackendError(error);
+      return;
+    }
     addToast({
       message: `"${expense.description || expense.category}" deleted`,
       type: "success",
       action: {
         label: "Undo",
-        onClick: () =>
-          addExpense({
+        onClick: () => {
+          void addExpense({
             amount: expense.amount,
             category: expense.category,
             description: expense.description,
             date: expense.date,
-          }),
+          }).catch(showBackendError);
+        },
       },
     });
   }
 
-  function handleDuplicate(expense: Expense) {
-    addExpense({
-      amount: expense.amount,
-      category: expense.category,
-      description: expense.description,
-      date: new Date().toISOString().split("T")[0],
-    });
+  async function handleDuplicate(expense: Expense) {
+    try {
+      await addExpense({
+        amount: expense.amount,
+        category: expense.category,
+        description: expense.description,
+        date: new Date().toISOString().split("T")[0],
+      });
+    } catch (error) {
+      showBackendError(error);
+      return;
+    }
     addToast({
       message: `"${expense.description || expense.category}" duplicated`,
       type: "success",
@@ -218,10 +230,10 @@ export function ExpenseList({ search, selectedCategories, sortBy, onSortChange }
                           onEdit={(e) => setEditingExpense(e)}
                           onDelete={(id) => {
                             const e = dayExpenses.find((x) => x.id === id);
-                            if (e) handleDelete(e);
+                            if (e) void handleDelete(e);
                           }}
-                          onDuplicate={(e) => handleDuplicate(e)}
-                          onTogglePin={(id) => togglePin(id)}
+                          onDuplicate={(e) => void handleDuplicate(e)}
+                          onTogglePin={(id) => void togglePin(id).catch(showBackendError)}
                         />
                       );
                     })}
@@ -256,7 +268,7 @@ export function ExpenseList({ search, selectedCategories, sortBy, onSortChange }
               type: "info",
               action: {
                 label: "Undo",
-                onClick: () => updateExpense(oldExpense.id, oldExpense),
+                onClick: () => void updateExpense(oldExpense.id, oldExpense).catch(showBackendError),
               },
             });
           }}

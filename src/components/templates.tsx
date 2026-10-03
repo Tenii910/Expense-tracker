@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Plus, Bookmark, X, Sparkles, Bolt, Clock, Trash2 } from "lucide-react";
+import { Plus, Bookmark, Sparkles, Bolt, Clock, Trash2 } from "lucide-react";
 import { useExpenseStore } from "@/lib/store";
 import { useToastStore } from "@/lib/toast-store";
 import { useTemplateStore, type ExpenseTemplate } from "@/lib/template-store";
@@ -13,6 +13,7 @@ import { Modal } from "@/components/ui/modal";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { showBackendError } from "@/lib/backend-errors";
 
 const container = {
   hidden: { opacity: 0 },
@@ -48,13 +49,18 @@ export function Templates() {
     return custom?.color ?? getCategoryColor(cat);
   }
 
-  function handleUse(t: ExpenseTemplate) {
-    addExpense({
-      amount: t.amount,
-      category: t.category,
-      description: t.description,
-      date: new Date().toISOString().split("T")[0],
-    });
+  async function handleUse(t: ExpenseTemplate) {
+    try {
+      await addExpense({
+        amount: t.amount,
+        category: t.category,
+        description: t.description,
+        date: new Date().toISOString().split("T")[0],
+      });
+    } catch (error) {
+      showBackendError(error);
+      return;
+    }
     addToast({
       message: `${formatCurrency(t.amount)} ${t.description || t.category} added`,
       type: "success",
@@ -139,8 +145,9 @@ export function Templates() {
                     onClick={(e) => {
                       e.stopPropagation();
                       e.preventDefault();
-                      removeTemplate(t.id);
-                      addToast({ message: "Template removed", type: "info" });
+                      void removeTemplate(t.id).then(() => {
+                        addToast({ message: "Template removed", type: "info" });
+                      }).catch(showBackendError);
                     }}
                     className="relative z-10 rounded-lg p-1.5 text-text-tertiary hover:text-danger hover:bg-danger/10 transition-colors cursor-pointer"
                     title="Delete template"
@@ -159,7 +166,7 @@ export function Templates() {
                   <span>{t.category}</span>
                 </div>
                 <button
-                  onClick={() => handleUse(t)}
+                  onClick={() => void handleUse(t)}
                   className="w-full rounded-xl bg-primary/10 py-2 text-sm font-semibold text-primary hover:bg-primary/20 transition-colors cursor-pointer"
                 >
                   <Bolt size={14} className="inline mr-1.5 -mt-0.5" />
@@ -174,8 +181,8 @@ export function Templates() {
       {open && (
         <TemplateForm
           onClose={() => setOpen(false)}
-          onSave={(data) => {
-            addTemplate(data);
+          onSave={async (data) => {
+            await addTemplate(data);
             addToast({ message: "Template saved", type: "success" });
             setOpen(false);
           }}
@@ -192,18 +199,22 @@ function TemplateForm({
   categories,
 }: {
   onClose: () => void;
-  onSave: (data: { amount: number; category: string; description: string }) => void;
+  onSave: (data: { amount: number; category: string; description: string }) => Promise<void>;
   categories: string[];
 }) {
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState(categories[0]);
   const [description, setDescription] = useState("");
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const amt = parseFloat(amount);
     if (isNaN(amt) || amt <= 0) return;
-    onSave({ amount: amt, category, description: description.trim() });
+    try {
+      await onSave({ amount: amt, category, description: description.trim() });
+    } catch (error) {
+      showBackendError(error);
+    }
   }
 
   return (

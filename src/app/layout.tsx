@@ -2,8 +2,9 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { PWARegister } from "@/components/pwa-register";
-import { Header } from "@/components/header";
 import { AuthGuard } from "@/components/auth-guard";
+import { BackendProvider } from "@/lib/backend-provider";
+import { AppFrame } from "@/components/app-frame";
 
 export const metadata: Metadata = {
   title: "Expense Tracker — Track your spending",
@@ -23,7 +24,6 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
   viewportFit: "cover",
 };
 
@@ -38,15 +38,16 @@ export default function RootLayout({
         <link rel="manifest" href="/manifest.json" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <script dangerouslySetInnerHTML={{
-          __html: `(function(){try{var d=JSON.parse(localStorage.getItem("expense-theme"));if(d&&d.state&&d.state.isDark)document.documentElement.classList.add("dark")}catch(e){}})()`
-        }} />
       </head>
       <body className="bg-surface text-text-primary antialiased">
-         <ThemeProvider>
-          <AuthGuard>{children}</AuthGuard>
-          <PWARegister />
-        </ThemeProvider>
+        <BackendProvider>
+          <ThemeProvider>
+            <AppFrame>
+              <AuthGuard>{children}</AuthGuard>
+            </AppFrame>
+            <PWARegister />
+          </ThemeProvider>
+        </BackendProvider>
       </body>
     </html>
   );

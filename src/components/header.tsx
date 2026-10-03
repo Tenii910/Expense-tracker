@@ -1,278 +1,195 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { usePathname } from "next/navigation";
+import { useRef, useState } from "react";
 import Link from "next/link";
-import { Moon, Sun, Wallet, Trash2, ChevronDown, Download, Upload, LayoutDashboard, ListOrdered, Target, RefreshCw, Bookmark, BarChart3, User, LogIn, LogOut } from "lucide-react";
-import { useThemeStore } from "@/lib/theme-store";
-import { useCurrencyStore, CURRENCIES, type CurrencyCode } from "@/lib/currency-store";
-import { useExpenseStore } from "@/lib/store";
-import { useConfirmStore } from "@/lib/confirm-store";
-import { useToastStore } from "@/lib/toast-store";
+import { usePathname } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  BarChart3, Bookmark, Download, LayoutDashboard, LogOut, Moon, RefreshCw,
+  Settings2, Sun, Target, Trash2, Upload, Wallet,
+} from "lucide-react";
 import { useAuthStore } from "@/lib/auth-store";
+import { useThemeStore } from "@/lib/theme-store";
+import { useExpenseStore } from "@/lib/store";
+import { useToastStore } from "@/lib/toast-store";
+import { useConfirmStore } from "@/lib/confirm-store";
 import { createBackup, restoreBackup } from "@/lib/backup";
-import { ImportButton } from "./import-button";
-import { CategoryManager } from "./category-manager";
+import { ImportButton } from "@/components/import-button";
+import { CategoryManager } from "@/components/category-manager";
+import { showBackendError } from "@/lib/backend-errors";
 
 const NAV_ITEMS = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/expenses", label: "Expenses", icon: ListOrdered },
-  { href: "/budgets", label: "Budgets", icon: Target },
-  { href: "/recurring", label: "Recurring", icon: RefreshCw },
-  { href: "/templates", label: "Templates", icon: Bookmark },
-  { href: "/analytics", label: "Analytics", icon: BarChart3 },
+  { href: "/", label: "Overview", icon: LayoutDashboard, hint: "Your money at a glance" },
+  { href: "/expenses", label: "Transactions", icon: Wallet, hint: "Review every expense" },
+  { href: "/budgets", label: "Budgets", icon: Target, hint: "Plan monthly limits" },
+  { href: "/recurring", label: "Recurring", icon: RefreshCw, hint: "Manage scheduled costs" },
+  { href: "/templates", label: "Templates", icon: Bookmark, hint: "Quick-add favorites" },
+  { href: "/analytics", label: "Analytics", icon: BarChart3, hint: "Explore spending trends" },
 ] as const;
-
-const PAGE_TITLES: Record<string, string> = {
-  "/": "Dashboard",
-  "/expenses": "Expenses",
-  "/budgets": "Budgets",
-  "/recurring": "Recurring",
-  "/templates": "Templates",
-  "/analytics": "Analytics",
-  "/login": "Sign In",
-  "/signup": "Create Account",
-};
 
 export function Header() {
   const pathname = usePathname();
+  const currentUser = useAuthStore((state) => state.currentUser);
+  const logout = useAuthStore((state) => state.logout);
   const { isDark, toggle } = useThemeStore();
-  const { code: currencyCode, setCode: setCurrency } = useCurrencyStore();
-  const expenses = useExpenseStore((s) => s.expenses);
-  const clearAll = useExpenseStore((s) => s.clearAll);
-  const showConfirm = useConfirmStore((s) => s.show);
-  const addToast = useToastStore((s) => s.addToast);
-  const currentUser = useAuthStore((s) => s.currentUser);
-  const logout = useAuthStore((s) => s.logout);
-  const [showMenu, setShowMenu] = useState(false);
-  const [showCurrency, setShowCurrency] = useState(false);
+  const expenses = useExpenseStore((state) => state.expenses);
+  const clearAll = useExpenseStore((state) => state.clearAll);
+  const showConfirm = useConfirmStore((state) => state.show);
+  const addToast = useToastStore((state) => state.addToast);
+  const [menuOpen, setMenuOpen] = useState(false);
   const restoreRef = useRef<HTMLInputElement>(null);
 
-  const pageTitle = PAGE_TITLES[pathname] ?? "Expense Tracker";
+  if (!currentUser || pathname === "/login" || pathname === "/signup") return null;
 
-  function handleRestore(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+  function handleRestore(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (evt) => {
-      const text = evt.target?.result as string;
-      const result = restoreBackup(text);
+    reader.onload = async (loadEvent) => {
+      const result = await restoreBackup(String(loadEvent.target?.result ?? ""));
       addToast({ message: result.message, type: result.success ? "success" : "error" });
     };
     reader.readAsText(file);
-    e.target.value = "";
+    event.target.value = "";
   }
 
   function handleClearAll() {
-    setShowMenu(false);
+    setMenuOpen(false);
     showConfirm({
       title: "Clear all expenses?",
-      message: `This will permanently delete all ${expenses.length} expense${expenses.length !== 1 ? "s" : ""}.`,
-      confirmLabel: "Delete All",
-      onConfirm: () => {
-        clearAll();
+      message: `This will permanently delete all ${expenses.length} expense${expenses.length === 1 ? "" : "s"}.`,
+      confirmLabel: "Delete all",
+      onConfirm: () => void clearAll().then(() => {
         addToast({ message: "All expenses cleared", type: "info" });
-      },
+      }).catch(showBackendError),
     });
   }
 
+  const accountTools = (
+    <>
+      <ImportButton />
+      <CategoryManager />
+      <button
+        onClick={() => { createBackup(); setMenuOpen(false); }}
+        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-text-secondary transition hover:bg-surface-hover hover:text-text-primary"
+      >
+        <Download size={16} /> Backup data
+      </button>
+      <input ref={restoreRef} type="file" accept=".json" className="hidden" onChange={handleRestore} />
+      <button
+        onClick={() => restoreRef.current?.click()}
+        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-text-secondary transition hover:bg-surface-hover hover:text-text-primary"
+      >
+        <Upload size={16} /> Restore backup
+      </button>
+      {expenses.length > 0 && (
+        <button onClick={handleClearAll} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-danger transition hover:bg-danger/10">
+          <Trash2 size={16} /> Clear all expenses
+        </button>
+      )}
+    </>
+  );
+
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-surface/80 backdrop-blur-lg">
-      <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3 sm:px-6">
-        <div className="flex items-center gap-2.5">
-          <Link href="/" className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary">
-            <Wallet size={18} className="text-white" />
-          </Link>
-          <div>
-            <h1 className="text-lg font-semibold text-text-primary leading-tight">
-              {pageTitle}
-            </h1>
-          </div>
+    <>
+      {/* Desktop sidebar */}
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-border/70 bg-surface px-4 py-6 md:flex">
+        <Link href="/" className="mb-10 flex items-center gap-3 px-2">
+          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary text-white shadow-lg shadow-primary/20">
+            <Wallet size={21} />
+          </span>
+          <span>
+            <span className="block text-base font-extrabold tracking-tight text-text-primary">pocketwise</span>
+            <span className="block text-[10px] font-semibold uppercase tracking-[0.2em] text-text-tertiary">personal finance</span>
+          </span>
+        </Link>
+
+        <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.2em] text-text-tertiary">Workspace</p>
+        <nav className="flex flex-1 flex-col gap-1" aria-label="Main navigation">
+          {NAV_ITEMS.map((item, index) => {
+            const Icon = item.icon;
+            const active = pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                title={item.hint}
+                className={`group relative flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-semibold transition-all duration-200 ${active ? "bg-primary text-white shadow-lg shadow-primary/15" : "text-text-secondary hover:translate-x-0.5 hover:bg-surface-hover hover:text-text-primary"}`}
+              >
+                <motion.span initial={{ scale: 0.8 }} animate={{ scale: 1 }} transition={{ delay: index * 0.04 }}>
+                  <Icon size={18} />
+                </motion.span>
+                {item.label}
+                {active && <motion.span layoutId="active-nav-dot" className="ml-auto h-1.5 w-1.5 rounded-full bg-accent-light" />}
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="mb-4 rounded-2xl border border-border bg-surface-alt p-3">
+          <p className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-text-tertiary">
+            <Settings2 size={13} /> Account tools
+          </p>
+          <div className="space-y-0.5">{accountTools}</div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <nav className="hidden md:flex items-center gap-1 mr-3">
-            {NAV_ITEMS.map((item) => {
-              const Icon = item.icon;
-              const isActive = pathname === item.href;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-colors ${
-                    isActive
-                      ? "bg-primary text-white"
-                      : "text-text-tertiary hover:text-text-primary hover:bg-surface-hover"
-                  }`}
-                >
-                  <Icon size={14} />
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
-
-          <div className="relative">
-            <button
-              onClick={() => setShowCurrency(!showCurrency)}
-              className="flex h-9 items-center gap-1 rounded-xl border border-border px-3 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors cursor-pointer"
-            >
-              {CURRENCIES[currencyCode].symbol}
-              <ChevronDown size={12} />
-            </button>
-            {showCurrency && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowCurrency(false)} />
-                <div className="absolute right-0 top-full mt-1 w-40 rounded-xl border border-border bg-surface p-1 shadow-lg z-50">
-                  {(Object.keys(CURRENCIES) as CurrencyCode[]).map((c) => (
-                    <button
-                      key={c}
-                      onClick={() => {
-                        setCurrency(c);
-                        setShowCurrency(false);
-                      }}
-                      className={`w-full rounded-lg px-3 py-2 text-left text-sm transition-colors cursor-pointer flex items-center gap-2 ${
-                        c === currencyCode
-                          ? "bg-primary/10 text-primary font-medium"
-                          : "text-text-primary hover:bg-surface-hover"
-                      }`}
-                    >
-                      <span className="w-5 text-center">{CURRENCIES[c].symbol}</span>
-                      {CURRENCIES[c].name}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-
-          <div className="relative">
-            <button
-              onClick={() => setShowMenu(!showMenu)}
-              className="flex h-9 items-center gap-1.5 rounded-xl border border-border px-2.5 text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors cursor-pointer"
-              aria-label="Settings and Profile"
-            >
-              <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-primary/10 text-primary font-bold text-xs">
-                {currentUser ? currentUser.name[0].toUpperCase() : <User size={14} />}
-              </div>
-              {currentUser && (
-                <span className="hidden sm:inline text-xs font-semibold text-text-primary truncate max-w-[80px]">
-                  {currentUser.name.split(" ")[0]}
-                </span>
-              )}
-            </button>
-
-            {showMenu && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
-                <div className="absolute right-0 top-full mt-1 w-52 rounded-xl border border-border bg-surface p-1 shadow-lg z-50">
-                  {currentUser ? (
-                    <div className="px-3 py-2 border-b border-border mb-1">
-                      <p className="text-xs font-bold text-text-primary truncate">{currentUser.name}</p>
-                      <p className="text-[11px] text-text-tertiary truncate">{currentUser.email}</p>
-                    </div>
-                  ) : (
-                    <div className="px-3 py-2 border-b border-border mb-1">
-                      <p className="text-xs text-text-tertiary">Guest User</p>
-                    </div>
-                  )}
-
-                  <ImportButton />
-                  <CategoryManager />
-                  <button
-                    onClick={() => {
-                      createBackup();
-                      setShowMenu(false);
-                    }}
-                    className="w-full rounded-lg px-3 py-2 text-left text-sm text-text-primary hover:bg-surface-hover transition-colors cursor-pointer flex items-center gap-2"
-                  >
-                    <Download size={14} />
-                    Backup data
-                  </button>
-                  <input
-                    ref={restoreRef}
-                    type="file"
-                    accept=".json"
-                    className="hidden"
-                    onChange={handleRestore}
-                  />
-                  <button
-                    onClick={() => restoreRef.current?.click()}
-                    className="w-full rounded-lg px-3 py-2 text-left text-sm text-text-primary hover:bg-surface-hover transition-colors cursor-pointer flex items-center gap-2"
-                  >
-                    <Upload size={14} />
-                    Restore data
-                  </button>
-                  
-                  <div className="border-t border-border my-1" />
-
-                  {currentUser ? (
-                    <button
-                      onClick={() => {
-                        logout();
-                        setShowMenu(false);
-                        addToast({ message: "Logged out", type: "info" });
-                      }}
-                      className="w-full rounded-lg px-3 py-2 text-left text-sm text-danger hover:bg-danger/10 transition-colors cursor-pointer flex items-center gap-2"
-                    >
-                      <LogOut size={14} />
-                      Sign out
-                    </button>
-                  ) : (
-                    <Link
-                      href="/login"
-                      onClick={() => setShowMenu(false)}
-                      className="w-full rounded-lg px-3 py-2 text-left text-sm text-primary font-medium hover:bg-primary/10 transition-colors cursor-pointer flex items-center gap-2"
-                    >
-                      <LogIn size={14} />
-                      Sign in
-                    </Link>
-                  )}
-
-                  {expenses.length > 0 && (
-                    <button
-                      onClick={handleClearAll}
-                      className="w-full rounded-lg px-3 py-2 text-left text-xs text-text-tertiary hover:text-danger hover:bg-danger/10 transition-colors cursor-pointer flex items-center gap-2 mt-1"
-                    >
-                      <Trash2 size={12} />
-                      Clear all data
-                    </button>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-
-          <button
-            onClick={toggle}
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-border text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors cursor-pointer"
-            aria-label="Toggle dark mode"
-          >
-            {isDark ? <Sun size={16} /> : <Moon size={16} />}
+        <div className="flex items-center gap-3 rounded-2xl border border-border p-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-sm font-extrabold text-accent">
+            {currentUser.name.slice(0, 1).toUpperCase()}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-bold text-text-primary">{currentUser.name}</span>
+            <span className="block truncate text-xs text-text-tertiary">{currentUser.email}</span>
+          </span>
+          <button aria-label="Sign out" title="Sign out" onClick={() => void logout().catch(showBackendError)} className="rounded-xl p-2 text-text-tertiary transition hover:bg-danger/10 hover:text-danger">
+            <LogOut size={16} />
           </button>
         </div>
-      </div>
+      </aside>
 
-      <nav className="flex md:hidden items-center gap-1 px-4 pb-2 overflow-x-auto">
+      {/* Mobile header */}
+      <header className="sticky top-0 z-40 flex items-center justify-between border-b border-border/70 bg-surface/90 px-4 py-3 backdrop-blur-xl md:hidden">
+        <Link href="/" className="flex items-center gap-2.5">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-white"><Wallet size={18} /></span>
+          <span className="font-extrabold tracking-tight text-text-primary">pocketwise</span>
+        </Link>
+        <div className="flex items-center gap-2">
+          <button aria-label="Toggle dark mode" onClick={() => void toggle().catch(showBackendError)} className="rounded-xl border border-border p-2 text-text-secondary">
+            {isDark ? <Sun size={17} /> : <Moon size={17} />}
+          </button>
+          <button onClick={() => setMenuOpen((open) => !open)} className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent/10 font-bold text-accent">
+            {currentUser.name.slice(0, 1).toUpperCase()}
+          </button>
+        </div>
+        <AnimatePresence>
+          {menuOpen && (
+            <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="absolute right-3 top-14 z-50 w-72 rounded-2xl border border-border bg-surface p-3 shadow-2xl">
+              <div className="mb-2 border-b border-border px-2 pb-3">
+                <p className="font-bold text-text-primary">{currentUser.name}</p>
+                <p className="text-xs text-text-tertiary">{currentUser.email}</p>
+              </div>
+              <div className="space-y-0.5">{accountTools}</div>
+              <button onClick={() => void logout().catch(showBackendError)} className="mt-2 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-danger hover:bg-danger/10">
+                <LogOut size={16} /> Sign out
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </header>
+
+      {/* Compact persistent mobile navigation */}
+      <nav aria-label="Main navigation" className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-6 border-t border-border/70 bg-surface/95 px-1 pb-[env(safe-area-inset-bottom)] pt-2 shadow-[0_-8px_30px_rgba(15,23,42,0.08)] backdrop-blur-xl md:hidden">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
-          const isActive = pathname === item.href;
+          const active = pathname === item.href;
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
-                isActive
-                  ? "bg-primary text-white"
-                  : "text-text-tertiary hover:text-text-primary hover:bg-surface-hover"
-              }`}
-            >
-              <Icon size={14} />
-              {item.label}
+            <Link key={item.href} href={item.href} aria-label={item.label} className={`flex flex-col items-center gap-1 rounded-xl py-1.5 text-[9px] font-bold ${active ? "text-primary" : "text-text-tertiary"}`}>
+              <Icon size={18} strokeWidth={active ? 2.5 : 1.8} />
+              <span className="truncate">{item.label === "Transactions" ? "Spend" : item.label}</span>
             </Link>
           );
         })}
       </nav>
-    </header>
+    </>
   );
 }

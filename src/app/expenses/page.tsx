@@ -15,8 +15,6 @@ import { QuickAdd } from "@/components/quick-add";
 import { CategoryChart } from "@/components/charts/category-chart";
 import { SpendingTrend } from "@/components/charts/spending-trend";
 import { Statistics } from "@/components/statistics";
-import { ToastContainer } from "@/components/ui/toast";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { useExpenseStore } from "@/lib/store";
 import { exportCSV, exportJSON } from "@/lib/export";
@@ -197,8 +195,6 @@ export default function ExpensesPage() {
       </main>
 
       <ExpenseForm open={showForm} onClose={() => setShowForm(false)} />
-      <ToastContainer />
-      <ConfirmDialog />
     </div>
   );
 }

@@ -6,12 +6,13 @@ import { useThemeStore } from "./theme-store";
 import { useCurrencyStore, type CurrencyCode } from "./currency-store";
 import { useCategoryStoreRaw } from "./category-store";
 import { useTemplateStoreRaw } from "./template-store";
+import { useAuthStore } from "./auth-store";
 
 interface BackupData {
   version: number;
   createdAt: string;
   expenses: ReturnType<typeof useExpenseStoreRaw.getState>["expenses"];
-  budgets: ReturnType<typeof useBudgetStoreRaw.getState>["userBudgets"];
+  budgets: Partial<Record<string, number>>;
   recurring: ReturnType<typeof useRecurringStoreRaw.getState>["templates"];
   customCategories: ReturnType<typeof useCategoryStoreRaw.getState>["customs"];
   templates: ReturnType<typeof useTemplateStoreRaw.getState>["templates"];
@@ -20,11 +21,12 @@ interface BackupData {
 }
 
 export function createBackup(): void {
+  const userId = useAuthStore.getState().currentUser?.id || "guest";
   const data: BackupData = {
     version: 2,
     createdAt: new Date().toISOString(),
     expenses: useExpenseStoreRaw.getState().expenses,
-    budgets: useBudgetStoreRaw.getState().userBudgets,
+    budgets: useBudgetStoreRaw.getState().userBudgets[userId] ?? {},
     recurring: useRecurringStoreRaw.getState().templates,
     customCategories: useCategoryStoreRaw.getState().customs,
     templates: useTemplateStoreRaw.getState().templates,
@@ -41,7 +43,7 @@ export function createBackup(): void {
   URL.revokeObjectURL(url);
 }
 
-export function restoreBackup(json: string): { success: boolean; message: string } {
+export async function restoreBackup(json: string): Promise<{ success: boolean; message: string }> {
   try {
     const data = JSON.parse(json) as BackupData;
 
@@ -49,28 +51,42 @@ export function restoreBackup(json: string): { success: boolean; message: string
       return { success: false, message: "Invalid backup file format" };
     }
 
-    useExpenseStoreRaw.getState().loadAll(data.expenses);
+    await useExpenseStoreRaw.getState().addExpenses(data.expenses.map((expense) => ({
+      amount: expense.amount,
+      category: expense.category,
+      description: expense.description,
+      date: expense.date,
+    })));
 
-    if (data.budgets) {
-      useBudgetStoreRaw.getState().loadAll(data.budgets);
+    await Promise.all([
+      ...Object.entries(data.budgets ?? {}).map(([category, amount]) =>
+        useBudgetStoreRaw.getState().setBudget(category, amount ?? 0)),
+      ...(data.recurring ?? []).map((template) =>
+        useRecurringStoreRaw.getState().addTemplate({
+          amount: template.amount,
+          category: template.category,
+          description: template.description,
+          frequency: template.frequency,
+          dayOfMonth: template.dayOfMonth,
+          dayOfWeek: template.dayOfWeek,
+          active: template.active,
+          startsOn: template.startsOn,
+        })),
+      ...(data.customCategories ?? []).map((category) =>
+        useCategoryStoreRaw.getState().addCustom(category.name, category.color)),
+      ...(data.templates ?? []).map((template) =>
+        useTemplateStoreRaw.getState().addTemplate({
+          amount: template.amount,
+          category: template.category,
+          description: template.description,
+        })),
+    ]);
+
+    if (typeof data.theme === "boolean" && data.theme !== useThemeStore.getState().isDark) {
+      await useThemeStore.getState().toggle();
     }
-    if (data.recurring) {
-      useRecurringStoreRaw.getState().loadAll(data.recurring);
-    }
-    if (Array.isArray(data.customCategories)) {
-      useCategoryStoreRaw.getState().loadAll(data.customCategories);
-    }
-    if (Array.isArray(data.templates)) {
-      useTemplateStoreRaw.getState().loadAll(data.templates);
-    }
-    if (typeof data.theme === "boolean") {
-      useThemeStore.getState().toggle();
-      if (!data.theme === useThemeStore.getState().isDark) {
-        useThemeStore.getState().toggle();
-      }
-    }
-    if (data.currency) {
-      useCurrencyStore.getState().setCode(data.currency as CurrencyCode);
+    if (["NGN", "USD", "EUR", "GBP", "GHS"].includes(data.currency)) {
+      await useCurrencyStore.getState().setCode(data.currency as CurrencyCode);
     }
 
     return {

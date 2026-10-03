@@ -1,7 +1,7 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 import type { Category } from "./types";
-import { useAuthStore } from "./auth-store";
+import { getSupabaseClient } from "./supabase";
+import type { Database } from "./database.types";
 
 export interface RecurringExpense {
   id: string;
@@ -13,70 +13,88 @@ export interface RecurringExpense {
   dayOfWeek?: number;
   active: boolean;
   userId?: string;
+  startsOn?: string;
 }
 
 interface RecurringStoreState {
   templates: RecurringExpense[];
-  addTemplate: (t: Omit<RecurringExpense, "id">) => void;
-  updateTemplate: (id: string, data: Partial<RecurringExpense>) => void;
-  removeTemplate: (id: string) => void;
+  addTemplate: (template: Omit<RecurringExpense, "id" | "userId">) => Promise<void>;
+  updateTemplate: (id: string, data: Partial<RecurringExpense>) => Promise<void>;
+  removeTemplate: (id: string) => Promise<void>;
   loadAll: (templates: RecurringExpense[]) => void;
 }
 
-let rid = 0;
-function genId() {
-  return `recur-${++rid}-${Date.now()}`;
+function mapRecurring(row: {
+  id: string;
+  amount: number | string;
+  category: string;
+  description: string;
+  frequency: "monthly" | "weekly";
+  day_of_month: number | null;
+  day_of_week: number | null;
+  active: boolean;
+  user_id: string;
+  starts_on: string;
+}): RecurringExpense {
+  return {
+    id: row.id,
+    amount: Number(row.amount),
+    category: row.category,
+    description: row.description,
+    frequency: row.frequency,
+    dayOfMonth: row.day_of_month ?? undefined,
+    dayOfWeek: row.day_of_week ?? undefined,
+    active: row.active,
+    userId: row.user_id,
+    startsOn: row.starts_on,
+  };
 }
 
-export const useRecurringStoreRaw = create<RecurringStoreState>()(
-  persist(
-    (set) => ({
-      templates: [],
-      addTemplate: (t) => {
-        const currentUser = useAuthStore.getState().currentUser;
-        set((s) => ({
-          templates: [...s.templates, { ...t, id: genId(), userId: currentUser?.id }],
-        }));
-      },
-      updateTemplate: (id, data) =>
-        set((s) => ({
-          templates: s.templates.map((t) =>
-            t.id === id ? { ...t, ...data } : t,
-          ),
-        })),
-      removeTemplate: (id) =>
-        set((s) => ({
-          templates: s.templates.filter((t) => t.id !== id),
-        })),
-      loadAll: (templates) => set({ templates }),
-    }),
-    { name: "expense-recurring" },
-  ),
-);
+export const useRecurringStoreRaw = create<RecurringStoreState>()((set) => ({
+  templates: [],
+  addTemplate: async (template) => {
+    const { data: inserted, error } = await getSupabaseClient()
+      .from("recurring_expenses").insert({
+        amount: template.amount,
+        category: template.category,
+        description: template.description,
+        frequency: template.frequency,
+        day_of_month: template.frequency === "monthly" ? template.dayOfMonth : null,
+        day_of_week: template.frequency === "weekly" ? template.dayOfWeek : null,
+        active: template.active,
+        starts_on: template.startsOn ?? new Date().toISOString().slice(0, 10),
+      }).select("*").single();
+    if (error) throw new Error(error.message);
+    set((state) => ({ templates: [...state.templates, mapRecurring(inserted)] }));
+  },
+  updateTemplate: async (id, changes) => {
+    const update: Database["public"]["Tables"]["recurring_expenses"]["Update"] = {};
+    if (changes.amount !== undefined) update.amount = changes.amount;
+    if (changes.category !== undefined) update.category = changes.category;
+    if (changes.description !== undefined) update.description = changes.description;
+    if (changes.frequency !== undefined) update.frequency = changes.frequency;
+    if (changes.dayOfMonth !== undefined || changes.frequency === "monthly") {
+      update.day_of_month = changes.frequency === "weekly" ? null : changes.dayOfMonth ?? null;
+    }
+    if (changes.dayOfWeek !== undefined || changes.frequency === "weekly") {
+      update.day_of_week = changes.frequency === "monthly" ? null : changes.dayOfWeek ?? null;
+    }
+    if (changes.active !== undefined) update.active = changes.active;
+    if (changes.startsOn !== undefined) update.starts_on = changes.startsOn;
 
-let lastRecurring: RecurringExpense[] | null = null;
-let lastRecUserId: string | undefined = undefined;
-let cachedScopedRecurringState: RecurringStoreState | null = null;
-
-function getScopedRecurringState(state: RecurringStoreState, userId: string | undefined): RecurringStoreState {
-  const templates = state?.templates || [];
-  if (templates === lastRecurring && userId === lastRecUserId && cachedScopedRecurringState) {
-    return cachedScopedRecurringState;
-  }
-  const userTemplates = userId
-    ? templates.filter((t) => t && (t.userId === userId || !t.userId))
-    : templates;
-  lastRecurring = templates;
-  lastRecUserId = userId;
-  cachedScopedRecurringState = { ...state, templates: userTemplates };
-  return cachedScopedRecurringState;
-}
+    const { data, error } = await getSupabaseClient()
+      .from("recurring_expenses").update(update).eq("id", id).select("*").single();
+    if (error) throw new Error(error.message);
+    set((state) => ({ templates: state.templates.map((item) => item.id === id ? mapRecurring(data) : item) }));
+  },
+  removeTemplate: async (id) => {
+    const { error } = await getSupabaseClient().from("recurring_expenses").delete().eq("id", id);
+    if (error) throw new Error(error.message);
+    set((state) => ({ templates: state.templates.filter((item) => item.id !== id) }));
+  },
+  loadAll: (templates) => set({ templates }),
+}));
 
 export function useRecurringStore<T>(selector: (state: RecurringStoreState) => T): T {
-  const currentUser = useAuthStore((s) => s.currentUser);
-  const userId = currentUser?.id;
-  return useRecurringStoreRaw((state) => {
-    const scopedState = getScopedRecurringState(state, userId);
-    return selector(scopedState);
-  });
+  return useRecurringStoreRaw(selector);
 }

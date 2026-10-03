@@ -3,8 +3,6 @@
 import { motion } from "framer-motion";
 import { RefreshCw } from "lucide-react";
 import { Recurring } from "@/components/recurring";
-import { ToastContainer } from "@/components/ui/toast";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 export default function RecurringPage() {
   return (
@@ -25,8 +23,6 @@ export default function RecurringPage() {
         </motion.div>
         <Recurring />
       </main>
-      <ToastContainer />
-      <ConfirmDialog />
     </div>
   );
 }

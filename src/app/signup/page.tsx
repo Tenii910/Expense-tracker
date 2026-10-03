@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 export default function SignupPage() {
   const router = useRouter();
   const signup = useAuthStore((s) => s.signup);
+  const backendError = useAuthStore((s) => s.backendError);
   const addToast = useToastStore((s) => s.addToast);
 
   const [name, setName] = useState("");
@@ -22,7 +23,7 @@ export default function SignupPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
@@ -38,11 +39,16 @@ export default function SignupPage() {
 
     setLoading(true);
 
-    const res = signup(name, email, password);
+    const res = await signup(name, email, password);
 
     if (res.success) {
-      addToast({ message: "Account created successfully!", type: "success" });
-      router.push("/");
+      if (res.needsEmailConfirmation) {
+        addToast({ message: "Account created. Check your email to confirm it, then sign in.", type: "success", placement: "center" });
+        router.push("/login");
+      } else {
+        addToast({ message: "Account created successfully!", type: "success", placement: "center" });
+        router.push("/");
+      }
     } else {
       setError(res.error || "Failed to create account");
       setLoading(false);
@@ -68,6 +74,11 @@ export default function SignupPage() {
 
         <div className="rounded-2xl border border-border bg-surface p-6 sm:p-8 card-shadow">
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            {backendError && (
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs font-medium text-amber-700">
+                {backendError}
+              </div>
+            )}
             {error && (
               <div className="rounded-xl border border-danger/20 bg-danger/10 p-3 text-xs font-medium text-danger">
                 {error}

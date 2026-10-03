@@ -5,6 +5,7 @@ import { Plus } from "lucide-react";
 import { useExpenseStore } from "@/lib/store";
 import { useToastStore } from "@/lib/toast-store";
 import { useAllCategories } from "@/lib/category-store";
+import { showBackendError } from "@/lib/backend-errors";
 
 export function QuickAdd() {
   const addExpense = useExpenseStore((s) => s.addExpense);
@@ -16,17 +17,22 @@ export function QuickAdd() {
   const [description, setDescription] = useState("");
   const [open, setOpen] = useState(false);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const amt = parseFloat(amount);
     if (isNaN(amt) || amt <= 0) return;
 
-    addExpense({
-      amount: amt,
-      category,
-      description: description.trim(),
-      date: new Date().toISOString().split("T")[0],
-    });
+    try {
+      await addExpense({
+        amount: amt,
+        category,
+        description: description.trim(),
+        date: new Date().toISOString().split("T")[0],
+      });
+    } catch (error) {
+      showBackendError(error);
+      return;
+    }
 
     addToast({
       message: `₦${amt.toLocaleString()} added`,

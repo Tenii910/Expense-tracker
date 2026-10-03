@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { Upload } from "lucide-react";
 import { useExpenseStore } from "@/lib/store";
 import { useToastStore } from "@/lib/toast-store";
+import { showBackendError } from "@/lib/backend-errors";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import type { Expense } from "@/lib/types";
@@ -47,7 +48,7 @@ function parseJSON(text: string): Partial<Expense>[] {
 
 export function ImportButton() {
   const inputRef = useRef<HTMLInputElement>(null);
-  const addExpense = useExpenseStore((s) => s.addExpense);
+  const addExpenses = useExpenseStore((s) => s.addExpenses);
   const addToast = useToastStore((s) => s.addToast);
   const [showModal, setShowModal] = useState(false);
   const [preview, setPreview] = useState<Partial<Expense>[] | null>(null);
@@ -68,26 +69,25 @@ export function ImportButton() {
     e.target.value = "";
   }
 
-  function handleImport() {
+  async function handleImport() {
     if (!preview) return;
-    let count = 0;
-    for (const item of preview) {
-      if (item.amount && item.category && item.date) {
-        addExpense({
-          amount: item.amount,
-          category: item.category,
-          description: item.description || "",
-          date: item.date,
-        });
-        count++;
-      }
+    const valid = preview.filter((item) => item.amount && item.category && item.date).map((item) => ({
+      amount: item.amount!,
+      category: item.category!,
+      description: item.description || "",
+      date: item.date!,
+    }));
+    try {
+      const imported = await addExpenses(valid);
+      setShowModal(false);
+      setPreview(null);
+      addToast({
+        message: `Imported ${imported.length} expense${imported.length !== 1 ? "s" : ""}`,
+        type: "success",
+      });
+    } catch (error) {
+      showBackendError(error);
     }
-    setShowModal(false);
-    setPreview(null);
-    addToast({
-      message: `Imported ${count} expense${count !== 1 ? "s" : ""}`,
-      type: "success",
-    });
   }
 
   return (

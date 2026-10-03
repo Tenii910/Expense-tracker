@@ -11,7 +11,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
-import { format, subMonths, parseISO } from "date-fns";
+import { format, subMonths } from "date-fns";
 import { useExpenseStore } from "@/lib/store";
 import { formatCurrency } from "@/lib/utils";
 import type { Expense } from "@/lib/types";

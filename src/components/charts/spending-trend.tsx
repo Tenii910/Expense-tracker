@@ -39,8 +39,6 @@ export function SpendingTrend({ expenses: propExpenses }: SpendingTrendProps) {
 
   if (data.length < 2) return null;
 
-  const maxTotal = Math.max(...data.map((d) => d.total));
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}

@@ -1,6 +1,5 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
-import { generateId } from "./utils";
+import { getSupabaseClient } from "@/lib/supabase";
 
 export interface UserSession {
   id: string;
@@ -9,89 +8,72 @@ export interface UserSession {
   createdAt: string;
 }
 
-export interface UserAccount extends UserSession {
-  passwordHash: string;
+export interface AuthResult {
+  success: boolean;
+  error?: string;
+  needsEmailConfirmation?: boolean;
 }
 
 interface AuthStore {
-  users: UserAccount[];
   currentUser: UserSession | null;
-  signup: (name: string, email: string, password: string) => { success: boolean; error?: string };
-  login: (email: string, password: string) => { success: boolean; error?: string };
-  logout: () => void;
+  initialized: boolean;
+  backendReady: boolean;
+  backendError: string | null;
+  setCurrentUser: (user: UserSession | null | ((current: UserSession | null) => UserSession | null)) => void;
+  setInitialized: (initialized: boolean) => void;
+  setBackendReady: (ready: boolean) => void;
+  setBackendError: (error: string | null) => void;
+  signup: (name: string, email: string, password: string) => Promise<AuthResult>;
+  login: (email: string, password: string) => Promise<AuthResult>;
+  logout: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthStore>()(
-  persist(
-    (set, get) => ({
-      users: [],
-      currentUser: null,
+export const useAuthStore = create<AuthStore>()((set) => ({
+  currentUser: null,
+  initialized: false,
+  backendReady: false,
+  backendError: null,
+  setCurrentUser: (user) => set((state) => ({
+    currentUser: typeof user === "function" ? user(state.currentUser) : user,
+  })),
+  setInitialized: (initialized) => set({ initialized }),
+  setBackendReady: (backendReady) => set({ backendReady }),
+  setBackendError: (backendError) => set({ backendError }),
 
-      signup: (name, email, password) => {
-        const { users } = get();
-        const trimmedEmail = email.trim().toLowerCase();
+  signup: async (name, email, password) => {
+    try {
+      const { data, error } = await getSupabaseClient().auth.signUp({
+        email: email.trim().toLowerCase(),
+        password,
+        options: { data: { name: name.trim() } },
+      });
+      if (error) return { success: false, error: error.message };
+      return { success: true, needsEmailConfirmation: !data.session };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Could not create your account.",
+      };
+    }
+  },
 
-        if (!name.trim() || !trimmedEmail || !password) {
-          return { success: false, error: "All fields are required" };
-        }
+  login: async (email, password) => {
+    try {
+      const { error } = await getSupabaseClient().auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+      return error ? { success: false, error: error.message } : { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Could not sign in.",
+      };
+    }
+  },
 
-        if (users.some((u) => u.email === trimmedEmail)) {
-          return { success: false, error: "An account with this email already exists" };
-        }
-
-        const newUser: UserAccount = {
-          id: generateId(),
-          name: name.trim(),
-          email: trimmedEmail,
-          passwordHash: btoa(password), // Basic client-side encoding for demo/local storage persistence
-          createdAt: new Date().toISOString(),
-        };
-
-        const session: UserSession = {
-          id: newUser.id,
-          name: newUser.name,
-          email: newUser.email,
-          createdAt: newUser.createdAt,
-        };
-
-        set({
-          users: [...users, newUser],
-          currentUser: session,
-        });
-
-        return { success: true };
-      },
-
-      login: (email, password) => {
-        const { users } = get();
-        const trimmedEmail = email.trim().toLowerCase();
-        const user = users.find((u) => u.email === trimmedEmail);
-
-        if (!user) {
-          return { success: false, error: "No account found with this email" };
-        }
-
-        if (user.passwordHash !== btoa(password)) {
-          return { success: false, error: "Incorrect password" };
-        }
-
-        const session: UserSession = {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          createdAt: user.createdAt,
-        };
-
-        set({ currentUser: session });
-        return { success: true };
-      },
-
-      logout: () => {
-        set({ currentUser: null });
-      },
-    }),
-    {
-      name: "expense-tracker-auth",
-    },
-  ),
-);
+  logout: async () => {
+    const { error } = await getSupabaseClient().auth.signOut();
+    if (error) throw new Error(error.message);
+  },
+}));

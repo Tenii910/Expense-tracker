@@ -4,6 +4,7 @@ export interface Toast {
   id: string;
   message: string;
   type: "success" | "error" | "info";
+  placement?: "corner" | "center";
   action?: { label: string; onClick: () => void };
 }
 

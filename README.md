@@ -1,36 +1,35 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Expense Tracker
 
-## Getting Started
+A Next.js expense-tracking application with Supabase Auth and a PostgreSQL backend protected by row-level security.
 
-First, run the development server:
+## Supabase setup
+
+1. Create a Supabase project.
+2. Apply the migration in one of these ways:
+   - In the Supabase SQL Editor, run the SQL migrations in `supabase/migrations/` in filename order. The second migration adds the authenticated-user default needed for custom categories.
+   - With the Supabase CLI, authenticate, link this workspace to your project, and run `supabase db push`. The project config and migration history are under `supabase/`.
+3. Put your project URL and **publishable** key in the root `.env` file (the existing local `.env` is git-ignored):
+
+   ```env
+   NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-supabase-publishable-key
+   ```
+
+   Do not put a service-role key in a `NEXT_PUBLIC_` variable or in browser code.
+4. In Supabase Authentication settings, configure the site URL and allowed redirect URLs for your local and deployed app. Choose whether email confirmation is required. When confirmation is enabled, users must confirm before signing in.
+5. Install dependencies and run `npm run dev`. The app uses port 3005.
+
+The database schema includes profiles/preferences, expenses, budgets, recurring expenses, templates, custom and built-in categories, row-level security policies, analytics views, and an idempotent recurring-expense RPC. Recurring entries are generated when an authenticated account loads its data. Supabase Auth handles passwords; the old local Base64 password values are not used or migrated. The checked-in migration is the local source of truth; it is not applied to a remote project until you link and push it (or execute it in the SQL Editor).
+
+## Development
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Other scripts: `npm run lint`, `npm run build`, and `npm start`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Existing local data
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The app now reads and writes account data through Supabase. It does not automatically import existing browser localStorage records into a Supabase account. Export a local backup before switching backends; the in-app restore action imports its data into the currently signed-in account.

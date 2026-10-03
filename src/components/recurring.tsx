@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { RefreshCw, Plus, Pencil, Trash2, ToggleLeft, ToggleRight } from "lucide-react";
 import { useRecurringStore, type RecurringExpense } from "@/lib/recurring-store";
-import { useExpenseStore } from "@/lib/store";
 import { useToastStore } from "@/lib/toast-store";
 import { getCategoryColor } from "@/lib/types";
 import { useAllCategories, useCategoryStore } from "@/lib/category-store";
@@ -13,22 +12,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Modal } from "@/components/ui/modal";
-import { format, getDate, getDay } from "date-fns";
-
-function isDue(template: RecurringExpense): boolean {
-  const now = new Date();
-  if (template.frequency === "monthly") {
-    return (template.dayOfMonth ?? 1) <= getDate(now);
-  }
-  return (template.dayOfWeek ?? 0) <= getDay(now);
-}
+import { showBackendError } from "@/lib/backend-errors";
 
 export function Recurring() {
   const templates = useRecurringStore((s) => s.templates);
   const updateTemplate = useRecurringStore((s) => s.updateTemplate);
   const removeTemplate = useRecurringStore((s) => s.removeTemplate);
-  const expenses = useExpenseStore((s) => s.expenses);
-  const addExpense = useExpenseStore((s) => s.addExpense);
   const addToast = useToastStore((s) => s.addToast);
 
   const formatCurrency = useFormatCurrency();
@@ -42,38 +31,6 @@ export function Recurring() {
   }
 
   const activeCount = templates.filter((t) => t.active).length;
-
-  useEffect(() => {
-    const currentMonth = format(new Date(), "yyyy-MM");
-    let added = 0;
-
-    for (const template of templates) {
-      if (!template.active) continue;
-      const alreadyAdded = expenses.some(
-        (e) =>
-          e.date.startsWith(currentMonth) &&
-          e.amount === template.amount &&
-          e.category === template.category &&
-          e.description === template.description,
-      );
-      if (!alreadyAdded && isDue(template)) {
-        addExpense({
-          amount: template.amount,
-          category: template.category,
-          description: template.description,
-          date: new Date().toISOString().split("T")[0],
-        });
-        added++;
-      }
-    }
-
-    if (added > 0) {
-      addToast({
-        message: `Added ${added} recurring expense${added > 1 ? "s" : ""}`,
-        type: "info",
-      });
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="rounded-2xl border border-border bg-surface p-6">
@@ -143,11 +100,12 @@ export function Recurring() {
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={() => {
-                      updateTemplate(t.id, { active: !t.active });
-                      addToast({
-                        message: t.active ? "Recurring paused" : "Recurring resumed",
-                        type: "info",
-                      });
+                      void updateTemplate(t.id, { active: !t.active }).then(() => {
+                        addToast({
+                          message: t.active ? "Recurring paused" : "Recurring resumed",
+                          type: "info",
+                        });
+                      }).catch(showBackendError);
                     }}
                     className="rounded-lg p-1.5 text-text-tertiary hover:text-primary transition-colors cursor-pointer"
                   >
@@ -164,8 +122,9 @@ export function Recurring() {
                   </button>
                   <button
                     onClick={() => {
-                      removeTemplate(t.id);
-                      addToast({ message: "Recurring removed", type: "info" });
+                      void removeTemplate(t.id).then(() => {
+                        addToast({ message: "Recurring removed", type: "info" });
+                      }).catch(showBackendError);
                     }}
                     className="rounded-lg p-1.5 text-text-tertiary hover:text-danger hover:bg-danger/10 transition-colors cursor-pointer"
                   >
@@ -216,7 +175,7 @@ function RecurringForm({
     edit?.dayOfWeek?.toString() ?? "0",
   );
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const amt = parseFloat(amount);
     if (isNaN(amt) || amt <= 0) return;
@@ -231,12 +190,16 @@ function RecurringForm({
       dayOfWeek: frequency === "weekly" ? parseInt(dayOfWeek) : undefined,
     };
 
-    if (edit) {
-      updateTemplate(edit.id, base);
-    } else {
-      addTemplate(base);
+    try {
+      if (edit) {
+        await updateTemplate(edit.id, base);
+      } else {
+        await addTemplate(base);
+      }
+      onClose();
+    } catch (error) {
+      showBackendError(error);
     }
-    onClose();
   }
 
   const CATEGORY_OPTIONS = categoriesForm.map((c) => ({ value: c, label: c }));

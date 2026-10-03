@@ -44,7 +44,7 @@ export function ExpenseForm({ editExpense, open, onClose, onUpdated }: ExpenseFo
     return Object.keys(errs).length === 0;
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!validate()) return;
 
@@ -55,14 +55,17 @@ export function ExpenseForm({ editExpense, open, onClose, onUpdated }: ExpenseFo
       date,
     };
 
-    if (editExpense) {
-      onUpdated?.(editExpense);
-      updateExpense(editExpense.id, data);
-    } else {
-      addExpense(data);
+    try {
+      if (editExpense) {
+        await updateExpense(editExpense.id, data);
+        onUpdated?.(editExpense);
+      } else {
+        await addExpense(data);
+      }
+      onClose();
+    } catch (error) {
+      setErrors({ form: error instanceof Error ? error.message : "Could not save the expense." });
     }
-
-    onClose();
   }
 
   return (
@@ -72,6 +75,7 @@ export function ExpenseForm({ editExpense, open, onClose, onUpdated }: ExpenseFo
       title={editExpense ? "Edit Expense" : "Add Expense"}
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        {errors.form && <p className="text-sm text-danger">{errors.form}</p>}
         <Input
           label="Amount (₦)"
           type="number"
